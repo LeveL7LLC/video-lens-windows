@@ -47,6 +47,19 @@ def _ytdlp_available():
     return importlib.util.find_spec("yt_dlp") is not None or shutil.which("yt-dlp") is not None
 
 
+def _save_transcript_copy(video_id, lines):
+    """Best-effort: persist the full transcript so render_report.py can embed it as
+    the report's Transcript section. Never let this fail the run."""
+    try:
+        tmp_dir = pathlib.Path.home() / "Downloads" / "video-lens" / ".tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        (tmp_dir / f"transcript-{video_id}.txt").write_text(
+            "\n".join(lines), encoding="utf-8"
+        )
+    except OSError:
+        pass
+
+
 def normalize_language(code):
     """BCP-47 / locale code → primary ISO-639-1 subtag (en-US → en)."""
     return (code or "").split("-")[0].split("_")[0].lower().strip()
@@ -157,6 +170,7 @@ def main():
         lines.append(f"{_format_timestamp(segment['start'])} {text}")
 
     print("\n".join(lines))
+    _save_transcript_copy(args.video_id, lines)
 
 
 if __name__ == "__main__":

@@ -117,6 +117,14 @@ def sweep_stale_payloads(base_dir: pathlib.Path, now: float | None = None) -> No
                 shutil.rmtree(entry, ignore_errors=True)
         except OSError:
             continue
+    # Same TTL for the per-video transcript copies render_report.py reads to embed
+    # the report's Transcript section (written by fetch_transcript/transcribe_local).
+    for entry in base_dir.glob("transcript-*.txt"):
+        try:
+            if entry.is_file() and entry.stat().st_mtime < cutoff:
+                entry.unlink()
+        except OSError:
+            continue
 
 
 def _normalize_tags(tags: list) -> list[str]:

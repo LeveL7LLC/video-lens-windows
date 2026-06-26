@@ -5,6 +5,7 @@ Usage: python3 fetch_transcript.py VIDEO_ID [LANG_PREF]
 """
 import argparse
 import datetime
+import pathlib
 import re
 import sys
 import urllib.request
@@ -63,6 +64,21 @@ def _fetch_html_metadata(video_id):
         return title, channel, published, views, duration
     except Exception:
         return "", "", "", "", ""
+
+
+def _save_transcript_copy(video_id, lines):
+    """Best-effort: persist the full transcript so render_report.py can embed it as
+    the report's Transcript section. The file write is never truncated (unlike the
+    agent's stdout), so the report gets the complete transcript even for very long
+    videos. Never let this fail the fetch."""
+    try:
+        tmp_dir = pathlib.Path.home() / "Downloads" / "video-lens" / ".tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        (tmp_dir / f"transcript-{video_id}.txt").write_text(
+            "\n".join(lines), encoding="utf-8"
+        )
+    except OSError:
+        pass
 
 
 def main():
@@ -193,6 +209,7 @@ def main():
             lines.append(f"[{m2}:{s2:02d}] {text}")
 
     print("\n".join(lines))
+    _save_transcript_copy(video_id, lines)
 
 
 if __name__ == "__main__":

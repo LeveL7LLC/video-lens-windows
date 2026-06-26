@@ -16,25 +16,45 @@ fi
 
 HTML_PATH="$1"
 
-if [ ! -f "$HTML_PATH" ]; then
+# Normalize a Windows-style path (C:\… or C:/…) to an MSYS path for all internal
+# path math. render_report.py prints a native Windows OUTPUT_PATH; without this the
+# drive-letter form fails to strip against the MSYS-style SERVE_DIR below, so the
+# browser opens http://localhost:8765/C:/Users/… instead of …/reports/<file>.html.
+# ($1 is kept verbatim for the final HTML_REPORT line.) cygpath is absent on
+# macOS/Linux, where the path is already POSIX and passes through unchanged.
+HTML_PATH_U="$HTML_PATH"
+if command -v cygpath >/dev/null 2>&1; then
+  HTML_PATH_U="$(cygpath -u "$HTML_PATH")"
+fi
+
+if [ ! -f "$HTML_PATH_U" ]; then
     echo "ERROR:SERVE_FILE_NOT_FOUND $HTML_PATH" >&2
     exit 1
 fi
 
-BYTES=$(wc -c < "$HTML_PATH" | tr -d ' ')
-if [ "$BYTES" -lt 4096 ] || ! grep -q '</html>' "$HTML_PATH"; then
+BYTES=$(wc -c < "$HTML_PATH_U" | tr -d ' ')
+if [ "$BYTES" -lt 4096 ] || ! grep -q '</html>' "$HTML_PATH_U"; then
     echo "ERROR:SERVE_REPORT_INCOMPLETE size=$BYTES path=$HTML_PATH" >&2
     exit 1
 fi
 
-DIR="$(cd "$(dirname "$HTML_PATH")" && pwd)"
-FILE="$(basename "$HTML_PATH")"
+DIR="$(cd "$(dirname "$HTML_PATH_U")" && pwd)"
+FILE="$(basename "$HTML_PATH_U")"
 PORT=8765
 
 # Use explicit root if provided (tilde-expanded by caller), else fall back to heuristic
 if [ $# -ge 2 ]; then
-  SERVE_DIR="$(cd "$2" && pwd)"
-  URL_PATH="${HTML_PATH#${SERVE_DIR}/}"
+  ROOT_ARG="$2"
+  if command -v cygpath >/dev/null 2>&1; then
+    ROOT_ARG="$(cygpath -u "$ROOT_ARG")"
+  fi
+  SERVE_DIR="$(cd "$ROOT_ARG" && pwd)"
+  URL_PATH="${HTML_PATH_U#"$SERVE_DIR"/}"
+  # Safety net: if the prefix didn't strip (path-form mismatch), fall back to the
+  # reports/<file> heuristic rather than leaving an absolute path in the URL.
+  if [ "$URL_PATH" = "$HTML_PATH_U" ]; then
+    if [ "$(basename "$DIR")" = "reports" ]; then URL_PATH="reports/$FILE"; else URL_PATH="$FILE"; fi
+  fi
 elif [[ "$(basename "$DIR")" == "reports" ]]; then
   SERVE_DIR="$(dirname "$DIR")"
   URL_PATH="reports/$FILE"

@@ -101,6 +101,7 @@ ALLOWED_CLASSES_BY_TAG = {
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 DATA_T_RE = re.compile(r"^\d{1,6}$")
 ALLOWED_OUTPUT_ROOT = pathlib.Path.home() / "Downloads" / "video-lens" / "reports"
+TRANSCRIPT_TMP_DIR = pathlib.Path.home() / "Downloads" / "video-lens" / ".tmp"
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com"}
 YOUTUBE_SHORT_HOSTS = {"youtu.be", "www.youtu.be"}
 
@@ -446,6 +447,80 @@ def sanitise_html(key: str, value: str, video_id: str) -> str:
     return "".join(parser.out)
 
 
+TRANSCRIPT_SEG_RE = re.compile(r"^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s?(.*)$")
+TRANSCRIPT_PARA_CHARS = 280  # group raw caption segments into ~this-sized passages
+
+
+def _ts_to_seconds(ts: str) -> int:
+    parts = [int(p) for p in ts.split(":")]
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    return 0
+
+
+def _build_transcript_html(video_id: str) -> tuple[str, str]:
+    """Return (section_html, nav_link_html) for the report's Transcript section.
+
+    Reads the per-video transcript copy written by fetch_transcript.py /
+    transcribe_local.py, groups the raw caption segments into readable passages,
+    and anchors each to its first timestamp (a clickable seek link). All text is
+    HTML-escaped here — the transcript is untrusted data, never markup. Returns
+    ("", "") when no transcript file exists (e.g. a render with no prior fetch),
+    so the section and its nav link simply do not appear.
+    """
+    path = TRANSCRIPT_TMP_DIR / f"transcript-{video_id}.txt"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return "", ""
+
+    segments = []
+    for line in raw.splitlines():
+        m = TRANSCRIPT_SEG_RE.match(line)
+        if m and m.group(2).strip():
+            segments.append((m.group(1), m.group(2).strip()))
+    if not segments:
+        return "", ""
+
+    paras: list[tuple[str, str]] = []
+    cur_ts: str | None = None
+    cur_text: list[str] = []
+    cur_len = 0
+    for ts, text in segments:
+        if cur_ts is None:
+            cur_ts = ts
+        cur_text.append(text)
+        cur_len += len(text) + 1
+        if cur_len >= TRANSCRIPT_PARA_CHARS:
+            paras.append((cur_ts, " ".join(cur_text)))
+            cur_ts, cur_text, cur_len = None, [], 0
+    if cur_text and cur_ts is not None:
+        paras.append((cur_ts, " ".join(cur_text)))
+
+    rows = []
+    for ts, text in paras:
+        secs = _ts_to_seconds(ts)
+        href = f"https://www.youtube.com/watch?v={video_id}&t={secs}"
+        rows.append(
+            '<p class="tline">'
+            f'<a class="ts" data-t="{secs}" href="{html_lib.escape(href, quote=True)}" '
+            f'target="_blank" rel="noopener noreferrer">{html_lib.escape(ts)}</a>'
+            f'<span class="ttext">{html_lib.escape(text)}</span>'
+            '</p>'
+        )
+    section = (
+        '<section id="transcript">\n'
+        '        <h2>Transcript</h2>\n'
+        '        <div class="transcript-body">\n          '
+        + "\n          ".join(rows)
+        + '\n        </div>\n      </section>'
+    )
+    nav = '<a href="#transcript">Transcript</a>'
+    return section, nav
+
+
 def sanitise_payload(data: dict, output_path: str = "") -> dict:
     video_id = str(data.get("VIDEO_ID", ""))
     if not VIDEO_ID_RE.fullmatch(video_id):
@@ -484,6 +559,10 @@ def sanitise_payload(data: dict, output_path: str = "") -> dict:
 
     meta = _build_meta_dict(data, clean["KEY_POINTS"], output_path)
     clean["VIDEO_LENS_META"] = _serialize_meta(meta)
+
+    section, nav = _build_transcript_html(video_id)
+    clean["TRANSCRIPT_SECTION"] = section
+    clean["TRANSCRIPT_NAV"] = nav
 
     return clean
 

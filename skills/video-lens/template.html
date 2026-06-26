@@ -1006,6 +1006,25 @@
       margin-top: 0.8rem;
     }
 
+    /* ── Transcript ── */
+    #transcript .transcript-body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+    }
+
+    .tline {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 0.55rem;
+      align-items: baseline;
+      margin-bottom: 0.7rem;
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+
+    .ttext {
+      color: var(--right-text);
+    }
+
     /* Mobile: single column */
     @media (max-width: 800px) {
       .layout {
@@ -1132,6 +1151,7 @@
         <a href="#summary" class="active">Summary</a>
         <a href="#takeaway">Takeaway</a>
         <a href="#key-points">Key Points</a>
+        {{TRANSCRIPT_NAV}}
         <div class="nav-actions">
           <button id="md-export-btn" class="icon-btn" aria-label="Export as Markdown" title="Export as Markdown">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -1174,6 +1194,8 @@
           {{KEY_POINTS}}
         </ul>
       </section>
+
+      {{TRANSCRIPT_SECTION}}
 
     </div>
   </div>
@@ -1564,8 +1586,9 @@
         rebuildIframe(savedTime);
       });
 
-      // Timestamp links — seek via API instead of reloading src
-      var links = document.querySelectorAll('a.ts');
+      // Timestamp links — seek via API instead of reloading src.
+      // Scoped to the outline; transcript timestamps get their own handler below.
+      var links = document.querySelectorAll('.topics a.ts');
       var topicItems = Array.from(links).map(function (a) {
         return { a: a, li: a.closest('li'), t: parseInt(a.getAttribute('data-t'), 10) };
       });
@@ -1610,6 +1633,18 @@
           } else {
             seekToTimestamp(item.t, item.li);
           }
+        });
+      });
+
+      // Transcript timestamps seek the player. Kept separate from the outline
+      // links above so they never drive the outline's active-section highlight.
+      document.querySelectorAll('#transcript a.ts').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          var t = parseInt(this.getAttribute('data-t'), 10);
+          if (ytPlayer && ytPlayer.seekTo) { ytPlayer.seekTo(t, true); ytPlayer.playVideo(); }
+          else { pendingSeek = t; }
+          document.querySelector('.left').scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       });
 
@@ -1751,7 +1786,8 @@
       var SECTION_TOOLTIPS = {
         'summary': 'A short overview of the video\'s core argument and conclusion.',
         'takeaway': 'The one thing to take away — going further than the summary.',
-        'key-points': 'Key concepts and insights — each with analytical depth added.'
+        'key-points': 'Key concepts and insights — each with analytical depth added.',
+        'transcript': 'The full transcript, grouped into readable passages with clickable timestamps.'
       };
 
       // Open all links in the YouTube description in a new tab
@@ -1810,6 +1846,17 @@
         // Takeaway
         var takeaway = document.querySelector('#takeaway p').innerText;
 
+        // Transcript (optional — only present when a transcript file was embedded)
+        var transcript = Array.from(document.querySelectorAll('#transcript .tline')).map(function (p) {
+          var tsEl = p.querySelector('a.ts');
+          var t = (tsEl ? tsEl.getAttribute('data-t') : null) || '0';
+          var tsText = tsEl ? tsEl.innerText : '0:00';
+          var txtEl = p.querySelector('.ttext');
+          var txt = txtEl ? txtEl.innerText.trim() : '';
+          var url = 'https://www.youtube.com/watch?v=' + VIDEO_ID + '&t=' + t;
+          return '[' + tsText + '](' + url + ') ' + txt;
+        }).join('\n\n');
+
         // Outline — each li has data-t (seconds), .outline-title and optional .outline-detail
         var outline = Array.from(document.querySelectorAll('.topics li')).map(function (li) {
           var tsEl = li.querySelector('a.ts');
@@ -1865,6 +1912,7 @@
           '',
           keyPoints,
         ].concat(description ? ['', '## YouTube Description', '', description] : [])
+         .concat(transcript ? ['', '## Transcript', '', transcript] : [])
          .concat(genFooter)
          .join('\n');
 

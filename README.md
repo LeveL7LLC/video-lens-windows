@@ -16,6 +16,7 @@ video-lens is a coding agent skill that fetches a YouTube transcript and generat
 - **Takeaway** — the single most important insight (1–3 sentences)
 - **Key points** — bulleted, scannable insights with supporting detail
 - **Timestamped outline** — click topics to expand summaries; click timestamps to jump the player
+- **Full transcript** — the complete transcript in its own section, grouped into readable passages with clickable timestamps (and included in the Markdown export)
 - **In-page YouTube player** — watch while reading; auto-highlights the current section
 - **Local transcription fallback** — when captions are unavailable, transcribe audio locally with Whisper
 - **Keyboard shortcuts** — playback speed, layout resize (S/M/L), navigation, and more (`?` for help)

@@ -208,6 +208,7 @@ The renderer:
 - Computes `GENERATION_DURATION_SECONDS` from `GENERATION_START_EPOCH`.
 - Derives the filename and saves it under `~/Downloads/video-lens/reports/`.
 - Builds the `VIDEO_LENS_META` block — you do NOT construct that JSON.
+- Embeds the full transcript as a **Transcript** section, read from the `.tmp/transcript-<id>.txt` copy that `fetch_transcript.py` (or `transcribe_local.py`) saved during Step 2 — you do NOT pass the transcript in the payload.
 
 **Tag allowlist.** Values for `SUMMARY`, `TAKEAWAY`, `META_LINE`, and `VIDEO_TITLE` are plain text — no HTML. Values for `KEY_POINTS`, `OUTLINE`, and `DESCRIPTION_SECTION` are allowlist-sanitised by `render_report.py`; emit only the structures shown in the value descriptions above. No `<script>`, `<style>`, `<iframe>`, comments, inline event handlers, non-HTTP URLs, or outline links to a different video.
 
